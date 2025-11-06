@@ -7,7 +7,7 @@ const router = useRouter();
 
 // 常用模板（主要展示）
 const featuredTemplate = {
-  name: '今日回顾模板',
+  name: '期货资金模板',
   template: 'MorningSessionReview',
   post: 'http://u.thsi.cn/imgsrc/share/91e968bc5bbf41be79974b34737e6428.png',
   featured: true,

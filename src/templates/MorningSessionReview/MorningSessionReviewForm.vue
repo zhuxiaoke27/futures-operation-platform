@@ -2,6 +2,9 @@
 import { themeMap } from "./theme/index";
 import type { UploadProps, UploadFile } from 'element-plus';
 import * as XLSX from 'xlsx';
+import { fetchAndProcessCapitalData } from '@/utils/capitalDataProcessor';
+import { ElMessage } from 'element-plus';
+import { Loading } from '@element-plus/icons-vue';
 
 export type MorningSessionReviewForm = {
   /** 主题 */
@@ -62,6 +65,49 @@ const form = ref<MorningSessionReviewForm>({
   excelData: props.default?.excelData || []
 });
 
+const loading = ref(false);
+
+// 缓存获取的数据
+const cachedData = ref<{
+  inflowTop20: any[];
+  outflowTop20: any[];
+}>({
+  inflowTop20: [],
+  outflowTop20: []
+});
+
+// 判断当前主题是流入还是流出
+const isInflowTheme = computed(() => {
+  return ['red', 'purple', 'brown'].includes(form.value.theme);
+});
+
+/** 自动获取数据 */
+const handleAutoFetch = async () => {
+  loading.value = true;
+  try {
+    const { inflowTop20, outflowTop20 } = await fetchAndProcessCapitalData();
+
+    // 缓存数据
+    cachedData.value = { inflowTop20, outflowTop20 };
+
+    // 根据主题选择数据
+    const data = isInflowTheme.value ? inflowTop20 : outflowTop20;
+
+    if (data.length === 0) {
+      ElMessage.warning('未获取到数据，请稍后重试');
+      return;
+    }
+
+    form.value.excelData = data;
+    ElMessage.success(`成功获取${data.length}条${isInflowTheme.value ? '资金流入' : '资金流出'}数据`);
+  } catch (error: any) {
+    console.error('获取数据失败:', error);
+    ElMessage.error(error.message || '获取数据失败，请检查网络连接');
+  } finally {
+    loading.value = false;
+  }
+};
+
 /** Method */
 const handleFileUpload: UploadProps['onChange'] = (uploadFile: UploadFile) => {
   const file = uploadFile.raw;
@@ -84,8 +130,18 @@ const handleFileUpload: UploadProps['onChange'] = (uploadFile: UploadFile) => {
 };
 
 const handleThemeChanged = (val: string) => {
-  // 主题变更逻辑保留，但移除orderBy设置
   console.log('主题已切换至:', val);
+
+  // 如果有缓存数据，根据主题切换数据
+  if (cachedData.value.inflowTop20.length > 0 || cachedData.value.outflowTop20.length > 0) {
+    const isInflow = ['red', 'purple', 'brown'].includes(val);
+    const data = isInflow ? cachedData.value.inflowTop20 : cachedData.value.outflowTop20;
+
+    if (data.length > 0) {
+      form.value.excelData = data;
+      ElMessage.success(`已切换为${isInflow ? '资金流入' : '资金流出'}前20数据`);
+    }
+  }
 };
 
 /** Watch */
@@ -106,6 +162,12 @@ watch(
     deep: true,
   }
 );
+
+/** Lifecycle */
+onMounted(() => {
+  // 进入页面时自动获取数据
+  handleAutoFetch();
+});
 </script>
 
 <template>
@@ -122,21 +184,26 @@ watch(
         </ElSelect>
       </ElFormItem>
       
-      <ElFormItem label="上传Excel文件">
-        <ElUpload
-          :auto-upload="false"
-          :show-file-list="true"
-          :limit="1"
-          accept=".xlsx,.xls"
-          @change="handleFileUpload"
-        >
-          <ElButton type="primary">选择Excel文件</ElButton>
-          <template #tip>
-            <div class="el-upload__tip">
-              请上传包含期货品种、数据涨幅、资金流向、沉淀资金、所属板块等字段的Excel文件
-            </div>
-          </template>
-        </ElUpload>
+      <ElFormItem label="数据来源">
+        <div v-if="loading" class="loading-status">
+          <ElIcon class="is-loading"><Loading /></ElIcon>
+          <span>正在获取数据...</span>
+        </div>
+        <div v-else class="data-source-info">
+          <span v-if="form.excelData.length > 0" class="data-count">
+            已加载 {{ form.excelData.length }} 条数据
+          </span>
+          <ElUpload
+            :auto-upload="false"
+            :show-file-list="true"
+            :limit="1"
+            accept=".xlsx,.xls"
+            @change="handleFileUpload"
+            class="inline-upload"
+          >
+            <ElButton type="primary" size="small">上传Excel替换</ElButton>
+          </ElUpload>
+        </div>
       </ElFormItem>
     </ElForm>
   </div>
@@ -146,5 +213,42 @@ watch(
 .morning-session-review-form {
     width: 100%;
     height: 100%;
+
+    .loading-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #409eff;
+      font-size: 14px;
+
+      .is-loading {
+        animation: rotating 2s linear infinite;
+      }
+    }
+
+    .data-source-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+
+      .data-count {
+        color: #67c23a;
+        font-size: 14px;
+      }
+
+      .inline-upload {
+        display: inline-block;
+      }
+    }
+}
+
+@keyframes rotating {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

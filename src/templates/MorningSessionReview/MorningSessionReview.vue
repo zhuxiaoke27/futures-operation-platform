@@ -34,12 +34,8 @@ const formatDataFunc = (data: any[]) => {
             formattedLimitRate = limitRateValue;
         } else {
             const numValue = typeof limitRateValue === 'string' ? parseFloat(limitRateValue) : limitRateValue;
-            // 如果数值在-1到1之间且不为0，很可能是百分比被转换为小数，需要乘以100
-            let displayValue = numValue;
-            if (Math.abs(numValue) < 1 && numValue !== 0) {
-                displayValue = numValue * 100;
-            }
-            formattedLimitRate = isNaN(displayValue) ? '0.00%' : `${displayValue.toFixed(2)}%`;
+            // 直接使用取到的值添加百分号，不需要再做换算
+            formattedLimitRate = isNaN(numValue) ? '0.00%' : `${numValue.toFixed(2)}%`;
         }
         
         return {
